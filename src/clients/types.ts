@@ -11,6 +11,12 @@ export interface XAuthConfig {
   userAccessToken: string;
   /** Authenticated user ID (required for bookmark endpoints) */
   userId: string;
+  /** OAuth 2.0 refresh token for auto-refreshing expired access tokens */
+  refreshToken?: string;
+  /** Consumer key (client ID) for token refresh */
+  consumerKey?: string;
+  /** Consumer secret for token refresh */
+  consumerSecret?: string;
 }
 
 // ============================================================================

@@ -6,9 +6,11 @@
  * Deduplication: same post requested within a 24h UTC window = single charge.
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import axiosRetry from 'axios-retry';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   XAuthConfig,
   XClientOptions,
@@ -30,15 +32,23 @@ import {
 dotenv.config();
 
 const X_API_BASE = 'https://api.x.com/2';
+const TOKEN_URL = 'https://api.x.com/2/oauth2/token';
 
 export class XClient {
   private readonly http: AxiosInstance;
   private readonly userId: string;
+  private refreshToken?: string;
+  private readonly consumerKey?: string;
+  private readonly consumerSecret?: string;
+  private isRefreshing = false;
 
   constructor(auth: XAuthConfig, options: XClientOptions = {}) {
     const { maxRetries = 3, retryDelay = 1000, timeout = 30000 } = options;
 
     this.userId = auth.userId;
+    this.refreshToken = auth.refreshToken;
+    this.consumerKey = auth.consumerKey;
+    this.consumerSecret = auth.consumerSecret;
 
     this.http = axios.create({
       baseURL: X_API_BASE,
@@ -54,15 +64,15 @@ export class XClient {
       retryDelay: (retryCount) => retryCount * retryDelay,
       retryCondition: (error: AxiosError) => {
         const status = error.response?.status;
-        // Retry on 5xx and network errors, not on 4xx (except 429 handled separately)
+        // Retry on 5xx and network errors, not on 4xx
         return !status || status >= 500;
       },
     });
 
-    // Response interceptor for error normalization
+    // Response interceptor: auto-refresh on 401, normalize other errors
     this.http.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
+      async (error: AxiosError) => {
         if (!error.response) {
           throw new XApiRequestError(
             `Network error: ${error.message}`,
@@ -73,6 +83,26 @@ export class XClient {
 
         const { status, headers } = error.response;
         const rateLimit = this.parseRateLimit(headers as Record<string, string>);
+        const originalRequest = error.config as InternalAxiosRequestConfig & { _retried?: boolean };
+
+        // Auto-refresh on 401 or 403 if we have a refresh token
+        // X returns 403 (not 401) for expired/invalid OAuth user tokens
+        if ((status === 401 || status === 403) && this.canRefresh() && !originalRequest._retried) {
+          originalRequest._retried = true;
+
+          try {
+            const newToken = await this.refreshAccessToken();
+            // Update default header for future requests
+            this.http.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+            // Update this request's header and retry
+            originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+            return this.http(originalRequest);
+          } catch (refreshError) {
+            throw new XAuthenticationError(
+              'Token refresh failed — run `npx tsx scripts/oauth-flow.ts` to re-authenticate',
+            );
+          }
+        }
 
         switch (status) {
           case 401:
@@ -102,6 +132,89 @@ export class XClient {
         }
       },
     );
+  }
+
+  // ==========================================================================
+  // Token Refresh
+  // ==========================================================================
+
+  private canRefresh(): boolean {
+    return !this.isRefreshing && !!this.refreshToken && !!this.consumerKey && !!this.consumerSecret;
+  }
+
+  /**
+   * Exchange refresh token for a new access token.
+   * Updates .env file with new tokens so they persist across runs.
+   */
+  private async refreshAccessToken(): Promise<string> {
+    this.isRefreshing = true;
+
+    try {
+      const basicAuth = Buffer.from(`${this.consumerKey}:${this.consumerSecret}`).toString('base64');
+
+      const params = new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: this.refreshToken!,
+        client_id: this.consumerKey!,
+      });
+
+      const response = await axios.post(TOKEN_URL, params.toString(), {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${basicAuth}`,
+        },
+      });
+
+      const { access_token, refresh_token: newRefreshToken } = response.data;
+
+      // Update .env file so new tokens persist
+      this.updateEnvFile(access_token, newRefreshToken);
+
+      // Update in-memory env vars
+      process.env.X_USER_ACCESS_TOKEN = access_token;
+      if (newRefreshToken) {
+        process.env.X_REFRESH_TOKEN = newRefreshToken;
+        // X uses rotating refresh tokens — the old one is now invalid
+        this.refreshToken = newRefreshToken;
+      }
+
+      console.info('[@hidden-leaf/x-skill] Access token refreshed successfully');
+      return access_token;
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+
+  /**
+   * Update .env file with new token values.
+   * Preserves all other env vars and comments.
+   */
+  private updateEnvFile(accessToken: string, refreshToken?: string): void {
+    const envPath = path.resolve(process.cwd(), '.env');
+
+    try {
+      if (!fs.existsSync(envPath)) return;
+
+      let content = fs.readFileSync(envPath, 'utf8');
+
+      // Replace access token
+      content = content.replace(
+        /^X_USER_ACCESS_TOKEN=.*/m,
+        `X_USER_ACCESS_TOKEN=${accessToken}`,
+      );
+
+      // Replace refresh token if we got a new one (rotating tokens)
+      if (refreshToken) {
+        content = content.replace(
+          /^X_REFRESH_TOKEN=.*/m,
+          `X_REFRESH_TOKEN=${refreshToken}`,
+        );
+      }
+
+      fs.writeFileSync(envPath, content, 'utf8');
+    } catch {
+      // Non-fatal — tokens still work in memory for this session
+    }
   }
 
   // ==========================================================================
@@ -352,6 +465,14 @@ export class XClient {
  *   X_USER_ACCESS_TOKEN — OAuth 2.0 User Access Token (from OAuth flow)
  *   X_USER_ID           — Authenticated user's numeric ID
  *
+ * Auto-refresh env vars (optional but recommended):
+ *   X_REFRESH_TOKEN   — Refresh token for auto-refreshing expired access tokens
+ *   X_CONSUMER_KEY    — App consumer key (client ID)
+ *   X_CONSUMER_SECRET — App consumer secret
+ *
+ * If all three refresh vars are set, the client will automatically refresh
+ * the access token on 401 and update .env with new tokens.
+ *
  * Optional env vars:
  *   X_MAX_RETRIES  — Max retries on 5xx (default: 3)
  *   X_TIMEOUT      — Request timeout in ms (default: 30000)
@@ -372,7 +493,13 @@ export function createXClientFromEnv(options: XClientOptions = {}): XClient {
   }
 
   return new XClient(
-    { userAccessToken, userId },
+    {
+      userAccessToken,
+      userId,
+      refreshToken: process.env.X_REFRESH_TOKEN,
+      consumerKey: process.env.X_CONSUMER_KEY,
+      consumerSecret: process.env.X_CONSUMER_SECRET,
+    },
     {
       maxRetries: Number(process.env.X_MAX_RETRIES) || options.maxRetries,
       timeout: Number(process.env.X_TIMEOUT) || options.timeout,
