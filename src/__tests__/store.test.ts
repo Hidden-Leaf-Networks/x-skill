@@ -1,4 +1,3 @@
-import Database from 'better-sqlite3';
 import { BookmarkStore } from '../cache/store';
 import type { Tweet, User, BookmarkFolder } from '../clients/types';
 import * as os from 'os';

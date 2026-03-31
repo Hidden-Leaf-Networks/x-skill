@@ -1,7 +1,6 @@
 import axios from 'axios';
 import { XClient } from '../clients/x-client';
 import {
-  XAuthenticationError,
   XRateLimitError,
   XNotFoundError,
   XApiRequestError,
@@ -10,7 +9,8 @@ import type { XAuthConfig } from '../clients/types';
 
 // Mock axios
 jest.mock('axios', () => {
-  const mockAxios: any = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mockAxios: Record<string, any> = {
     create: jest.fn(() => mockAxios),
     get: jest.fn(),
     post: jest.fn(),
@@ -32,7 +32,8 @@ jest.mock('axios-retry', () => ({
 }));
 
 const mockAxios = axios as jest.Mocked<typeof axios>;
-const mockAxiosInstance = mockAxios.create() as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockAxiosInstance = mockAxios.create() as Record<string, any>;
 
 const TEST_AUTH: XAuthConfig = {
   userAccessToken: 'test-access-token',
@@ -44,15 +45,15 @@ const TEST_AUTH: XAuthConfig = {
 
 describe('XClient', () => {
   let client: XClient;
-  let responseInterceptorSuccess: (response: any) => any;
-  let responseInterceptorError: (error: any) => any;
+  let responseInterceptorSuccess: (response: unknown) => unknown;
+  let responseInterceptorError: (error: unknown) => Promise<unknown>;
 
   beforeEach(() => {
     jest.clearAllMocks();
 
     // Capture the response interceptor callbacks
     mockAxiosInstance.interceptors.response.use.mockImplementation(
-      (onSuccess: any, onError: any) => {
+      (onSuccess: (r: unknown) => unknown, onError: (e: unknown) => Promise<unknown>) => {
         responseInterceptorSuccess = onSuccess;
         responseInterceptorError = onError;
       },
@@ -326,8 +327,8 @@ describe('XClient', () => {
     });
 
     it('throws XAuthenticationError on 401 without refresh capability', async () => {
-      // Create client without refresh tokens
-      const noRefreshClient = new XClient({
+      // Create client without refresh tokens (registers new interceptor)
+      new XClient({
         userAccessToken: 'token',
         userId: '123',
       });

@@ -70,7 +70,7 @@ function createMockStore(): jest.Mocked<BookmarkStore> {
     logSyncComplete: jest.fn(),
     logSyncError: jest.fn(),
     close: jest.fn(),
-  } as any;
+  } as unknown as jest.Mocked<BookmarkStore>;
 }
 
 // ==========================================================================
@@ -87,7 +87,7 @@ function createMockClient(): jest.Mocked<XClient> {
     getBookmarksWithFolders: jest.fn(),
     getTweetsByIds: jest.fn(),
     getMe: jest.fn(),
-  } as any;
+  } as unknown as jest.Mocked<XClient>;
 }
 
 describe('BookmarksSkill', () => {

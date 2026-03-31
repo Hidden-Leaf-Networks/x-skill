@@ -61,8 +61,8 @@ describe('createLogger', () => {
   it('respects LOG_LEVEL filtering', () => {
     // We need to re-import to pick up the new env var, but since the module
     // reads LOG_LEVEL at import time, we test that error always logs at default level
-    const debugSpy = jest.spyOn(console, 'debug').mockImplementation();
-    const infoSpy = jest.spyOn(console, 'info').mockImplementation();
+    jest.spyOn(console, 'debug').mockImplementation();
+    jest.spyOn(console, 'info').mockImplementation();
     const errorSpy = jest.spyOn(console, 'error').mockImplementation();
 
     const logger = createLogger('test');
