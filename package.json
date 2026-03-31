@@ -1,6 +1,6 @@
 {
   "name": "@hidden-leaf/x-skill",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "X (Twitter) bookmark intelligence skill for Claude Code — turn curated bookmarks into structured research briefs",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
