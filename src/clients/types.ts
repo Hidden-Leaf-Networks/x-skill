@@ -19,6 +19,28 @@ export interface XAuthConfig {
   consumerSecret?: string;
 }
 
+/** OAuth 1.0a credentials for media upload (requires Read+Write app permissions) */
+export interface XOAuth1Config {
+  consumerKey: string;
+  consumerSecret: string;
+  accessToken: string;
+  accessTokenSecret: string;
+}
+
+/** Result from posting a tweet */
+export interface TweetPostResult {
+  id: string;
+  text: string;
+  url: string;
+}
+
+/** Result from uploading media */
+export interface MediaUploadResult {
+  mediaId: string;
+  size: number;
+  expiresAfterSecs: number;
+}
+
 // ============================================================================
 // API Response Envelope
 // ============================================================================

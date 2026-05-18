@@ -22,7 +22,7 @@ dotenv.config();
 const CLIENT_ID = process.env.X_CONSUMER_KEY;
 const CLIENT_SECRET = process.env.X_CONSUMER_SECRET;
 const CALLBACK_URL = process.env.X_CALLBACK_URL || 'http://localhost:3000/callback';
-const SCOPES = ['bookmark.read', 'tweet.read', 'users.read', 'offline.access'];
+const SCOPES = ['bookmark.read', 'bookmark.write', 'tweet.read', 'tweet.write', 'users.read', 'offline.access'];
 
 if (!CLIENT_ID || !CLIENT_SECRET) {
   console.error('ERROR: X_CONSUMER_KEY and X_CONSUMER_SECRET must be set in .env');

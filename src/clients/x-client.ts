@@ -443,6 +443,116 @@ export class XClient {
   // Utilities
   // ==========================================================================
 
+  // ==========================================================================
+  // Publishing (requires OAuth 1.0a for media upload)
+  // ==========================================================================
+
+  /**
+   * Upload an image for use in tweets.
+   * Uses OAuth 1.0a signed multipart upload to v1.1 endpoint.
+   * Requires X_ORG_OAUTH1_* env vars and Read+Write app permissions.
+   */
+  async uploadMedia(
+    imageData: Buffer,
+    oauth1: import('./types').XOAuth1Config,
+  ): Promise<import('./types').MediaUploadResult> {
+    const crypto = await import('crypto');
+    const base64 = imageData.toString('base64');
+    const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
+
+    const pEnc = (s: string) =>
+      encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+
+    const oauthParams: Record<string, string> = {
+      oauth_consumer_key: oauth1.consumerKey,
+      oauth_nonce: crypto.randomBytes(16).toString('hex'),
+      oauth_signature_method: 'HMAC-SHA1',
+      oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+      oauth_token: oauth1.accessToken,
+      oauth_version: '1.0',
+    };
+
+    // Sign (multipart: body params excluded from signature)
+    const sorted = Object.keys(oauthParams)
+      .sort()
+      .map((k) => pEnc(k) + '=' + pEnc(oauthParams[k]))
+      .join('&');
+    const baseString = 'POST&' + pEnc(uploadUrl) + '&' + pEnc(sorted);
+    const signingKey = pEnc(oauth1.consumerSecret) + '&' + pEnc(oauth1.accessTokenSecret);
+    oauthParams.oauth_signature = crypto
+      .createHmac('sha1', signingKey)
+      .update(baseString)
+      .digest('base64');
+
+    const authHeader =
+      'OAuth ' +
+      Object.keys(oauthParams)
+        .sort()
+        .map((k) => pEnc(k) + '="' + pEnc(oauthParams[k]) + '"')
+        .join(', ');
+
+    const form = new FormData();
+    form.append('media_data', base64);
+    form.append('media_category', 'tweet_image');
+
+    const resp = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { Authorization: authHeader },
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Media upload failed (${resp.status}): ${text}`);
+    }
+
+    const data = (await resp.json()) as { media_id_string: string; size: number; expires_after_secs: number };
+    return {
+      mediaId: data.media_id_string,
+      size: data.size,
+      expiresAfterSecs: data.expires_after_secs,
+    };
+  }
+
+  /**
+   * Post a tweet, optionally with media.
+   * Uses OAuth 2.0 Bearer token for the v2 tweets endpoint.
+   */
+  async postTweet(
+    text: string,
+    options?: { mediaIds?: string[] },
+  ): Promise<import('./types').TweetPostResult> {
+    const body: Record<string, unknown> = { text };
+    if (options?.mediaIds?.length) {
+      body.media = { media_ids: options.mediaIds };
+    }
+
+    const resp = await this.http.post('/tweets', body);
+    const data = resp.data?.data;
+    if (!data?.id) {
+      throw new Error('Tweet post failed: ' + JSON.stringify(resp.data));
+    }
+
+    // Derive URL from user ID (screen_name not available here)
+    return {
+      id: data.id,
+      text: data.text,
+      url: `https://x.com/i/status/${data.id}`,
+    };
+  }
+
+  /**
+   * Delete a tweet by ID.
+   */
+  async deleteTweet(tweetId: string): Promise<boolean> {
+    const resp = await this.http.delete(`/tweets/${tweetId}`);
+    return resp.data?.data?.deleted === true;
+  }
+
+  // ==========================================================================
+  // Utilities
+  // ==========================================================================
+
   private parseRateLimit(headers: Record<string, string>) {
     const limit = Number(headers['x-rate-limit-limit']);
     const remaining = Number(headers['x-rate-limit-remaining']);

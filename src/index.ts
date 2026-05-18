@@ -5,8 +5,9 @@
  * Turns curated X bookmarks into structured research briefs.
  *
  * v1: Bookmark intelligence (list, fetch, brief)
+ * v1.1: Publish — tweet posting + media upload (OAuth 1.0a)
  * v2: Search, threads, profile (planned)
- * v3: Publish, schedule, reply (planned)
+ * v3: Schedule, reply (planned)
  */
 
 // ============================================================================
@@ -44,6 +45,9 @@ export type {
   BookmarkListParams,
   BookmarkFolderListParams,
   BookmarkFolderTweetsParams,
+  XOAuth1Config,
+  TweetPostResult,
+  MediaUploadResult,
 } from './clients/types.js';
 
 export {
