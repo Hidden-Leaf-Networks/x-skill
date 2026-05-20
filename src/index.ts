@@ -14,13 +14,14 @@
 // Client
 // ============================================================================
 
-export { XClient, createXClientFromEnv } from './clients/x-client.js';
+export { XClient, createXClientFromEnv, createOrgXClientFromEnv } from './clients/x-client.js';
 
 // ============================================================================
 // Client Types
 // ============================================================================
 
 export type {
+  XAccountType,
   XAuthConfig,
   XApiResponse,
   XPaginationMeta,
@@ -98,4 +99,4 @@ export { createLogger } from './utils/logger.js';
 // Version
 // ============================================================================
 
-export const VERSION = '1.0.0';
+export const VERSION = '1.2.0';

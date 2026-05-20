@@ -19,6 +19,7 @@ import {
   XAuthenticationError,
   XRateLimitError,
   XNotFoundError,
+  XAccountType,
   Tweet,
   User,
   BookmarkFolder,
@@ -40,6 +41,7 @@ export class XClient {
   private refreshToken?: string;
   private readonly consumerKey?: string;
   private readonly consumerSecret?: string;
+  private readonly accountType: XAccountType;
   private isRefreshing = false;
 
   constructor(auth: XAuthConfig, options: XClientOptions = {}) {
@@ -49,6 +51,7 @@ export class XClient {
     this.refreshToken = auth.refreshToken;
     this.consumerKey = auth.consumerKey;
     this.consumerSecret = auth.consumerSecret;
+    this.accountType = auth.accountType ?? 'personal';
 
     this.http = axios.create({
       baseURL: X_API_BASE,
@@ -170,10 +173,12 @@ export class XClient {
       // Update .env file so new tokens persist
       this.updateEnvFile(access_token, newRefreshToken);
 
-      // Update in-memory env vars
-      process.env.X_USER_ACCESS_TOKEN = access_token;
+      // Update in-memory env vars (account-aware)
+      const prefix = this.accountType === 'org' ? 'X_ORG' : 'X_USER';
+      process.env[`${prefix}_ACCESS_TOKEN`] = access_token;
       if (newRefreshToken) {
-        process.env.X_REFRESH_TOKEN = newRefreshToken;
+        const refreshKey = this.accountType === 'org' ? 'X_ORG_REFRESH_TOKEN' : 'X_REFRESH_TOKEN';
+        process.env[refreshKey] = newRefreshToken;
         // X uses rotating refresh tokens — the old one is now invalid
         this.refreshToken = newRefreshToken;
       }
@@ -197,17 +202,21 @@ export class XClient {
 
       let content = fs.readFileSync(envPath, 'utf8');
 
+      // Account-aware env var names
+      const accessKey = this.accountType === 'org' ? 'X_ORG_ACCESS_TOKEN' : 'X_USER_ACCESS_TOKEN';
+      const refreshKey = this.accountType === 'org' ? 'X_ORG_REFRESH_TOKEN' : 'X_REFRESH_TOKEN';
+
       // Replace access token
       content = content.replace(
-        /^X_USER_ACCESS_TOKEN=.*/m,
-        `X_USER_ACCESS_TOKEN=${accessToken}`,
+        new RegExp(`^${accessKey}=.*`, 'm'),
+        `${accessKey}=${accessToken}`,
       );
 
       // Replace refresh token if we got a new one (rotating tokens)
       if (refreshToken) {
         content = content.replace(
-          /^X_REFRESH_TOKEN=.*/m,
-          `X_REFRESH_TOKEN=${refreshToken}`,
+          new RegExp(`^${refreshKey}=.*`, 'm'),
+          `${refreshKey}=${refreshToken}`,
         );
       }
 
@@ -571,34 +580,65 @@ export class XClient {
 /**
  * Create an XClient from environment variables.
  *
- * Required env vars:
- *   X_USER_ACCESS_TOKEN — OAuth 2.0 User Access Token (from OAuth flow)
- *   X_USER_ID           — Authenticated user's numeric ID
+ * @param account — 'personal' (default) reads X_USER_* vars, 'org' reads X_ORG_* vars
  *
- * Auto-refresh env vars (optional but recommended):
- *   X_REFRESH_TOKEN   — Refresh token for auto-refreshing expired access tokens
- *   X_CONSUMER_KEY    — App consumer key (client ID)
- *   X_CONSUMER_SECRET — App consumer secret
+ * Personal env vars:
+ *   X_USER_ACCESS_TOKEN — OAuth 2.0 User Access Token
+ *   X_USER_ID           — User's numeric ID
+ *   X_REFRESH_TOKEN     — Refresh token
+ *   X_CONSUMER_KEY      — App consumer key (client ID)
+ *   X_CONSUMER_SECRET   — App consumer secret
  *
- * If all three refresh vars are set, the client will automatically refresh
- * the access token on 401 and update .env with new tokens.
- *
- * Optional env vars:
- *   X_MAX_RETRIES  — Max retries on 5xx (default: 3)
- *   X_TIMEOUT      — Request timeout in ms (default: 30000)
+ * Org env vars:
+ *   X_ORG_ACCESS_TOKEN  — OAuth 2.0 User Access Token for org account
+ *   X_ORG_USER_ID       — Org account's numeric ID
+ *   X_ORG_REFRESH_TOKEN — Refresh token for org account
+ *   X_ORG_CONSUMER_KEY  — App consumer key (or falls back to X_CONSUMER_KEY)
+ *   X_ORG_CONSUMER_SECRET — App consumer secret (or falls back to X_CONSUMER_SECRET)
  */
-export function createXClientFromEnv(options: XClientOptions = {}): XClient {
-  const userAccessToken = process.env.X_USER_ACCESS_TOKEN;
-  const userId = process.env.X_USER_ID;
+export function createXClientFromEnv(
+  accountOrOptions: XAccountType | XClientOptions = 'personal',
+  options: XClientOptions = {},
+): XClient {
+  // Support old signature: createXClientFromEnv(options) and new: createXClientFromEnv('org', options)
+  let account: XAccountType;
+  if (typeof accountOrOptions === 'string') {
+    account = accountOrOptions;
+  } else {
+    account = 'personal';
+    options = accountOrOptions;
+  }
+
+  let userAccessToken: string | undefined;
+  let userId: string | undefined;
+  let refreshToken: string | undefined;
+  let consumerKey: string | undefined;
+  let consumerSecret: string | undefined;
+
+  if (account === 'org') {
+    userAccessToken = process.env.X_ORG_ACCESS_TOKEN;
+    userId = process.env.X_ORG_USER_ID;
+    refreshToken = process.env.X_ORG_REFRESH_TOKEN;
+    consumerKey = process.env.X_ORG_CONSUMER_KEY ?? process.env.X_CONSUMER_KEY;
+    consumerSecret = process.env.X_ORG_CONSUMER_SECRET ?? process.env.X_CONSUMER_SECRET;
+  } else {
+    userAccessToken = process.env.X_USER_ACCESS_TOKEN;
+    userId = process.env.X_USER_ID;
+    refreshToken = process.env.X_REFRESH_TOKEN;
+    consumerKey = process.env.X_CONSUMER_KEY;
+    consumerSecret = process.env.X_CONSUMER_SECRET;
+  }
+
+  const label = account === 'org' ? 'X_ORG' : 'X_USER';
 
   if (!userAccessToken) {
     throw new XAuthenticationError(
-      'X_USER_ACCESS_TOKEN not set — run `npx tsx scripts/oauth-flow.ts` to generate one',
+      `${label}_ACCESS_TOKEN not set — run \`npx tsx scripts/oauth-flow.ts\` to generate one`,
     );
   }
   if (!userId) {
     throw new XAuthenticationError(
-      'X_USER_ID not set — run `npx tsx scripts/oauth-flow.ts` to get your user ID',
+      `${label}_USER_ID (or ${label}_ID) not set — run \`npx tsx scripts/oauth-flow.ts\` to get your user ID`,
     );
   }
 
@@ -606,9 +646,10 @@ export function createXClientFromEnv(options: XClientOptions = {}): XClient {
     {
       userAccessToken,
       userId,
-      refreshToken: process.env.X_REFRESH_TOKEN,
-      consumerKey: process.env.X_CONSUMER_KEY,
-      consumerSecret: process.env.X_CONSUMER_SECRET,
+      refreshToken,
+      consumerKey,
+      consumerSecret,
+      accountType: account,
     },
     {
       maxRetries: Number(process.env.X_MAX_RETRIES) || options.maxRetries,
@@ -616,4 +657,12 @@ export function createXClientFromEnv(options: XClientOptions = {}): XClient {
       ...options,
     },
   );
+}
+
+/**
+ * Convenience: create an XClient for the org account (@HiddenLeafHQ).
+ * Reads X_ORG_* env vars.
+ */
+export function createOrgXClientFromEnv(options: XClientOptions = {}): XClient {
+  return createXClientFromEnv('org', options);
 }

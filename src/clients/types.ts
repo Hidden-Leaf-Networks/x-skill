@@ -6,6 +6,9 @@
 // Auth
 // ============================================================================
 
+/** Account type for multi-auth support */
+export type XAccountType = 'personal' | 'org';
+
 export interface XAuthConfig {
   /** OAuth 2.0 User Access Token (from OAuth flow, NOT the App Bearer token) */
   userAccessToken: string;
@@ -17,6 +20,8 @@ export interface XAuthConfig {
   consumerKey?: string;
   /** Consumer secret for token refresh */
   consumerSecret?: string;
+  /** Account type — controls which env vars are written on token refresh */
+  accountType?: XAccountType;
 }
 
 /** OAuth 1.0a credentials for media upload (requires Read+Write app permissions) */
