@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/Hidden-Leaf-Networks/x-skill/actions/workflows/ci.yml/badge.svg)](https://github.com/Hidden-Leaf-Networks/x-skill/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/@hidden-leaf/x-skill.svg)](https://www.npmjs.com/package/@hidden-leaf/x-skill)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](https://www.typescriptlang.org/)
 
@@ -37,8 +37,8 @@ npm install @hidden-leaf/x-skill
 Sign up at [developer.x.com](https://developer.x.com) for pay-per-use API access.
 
 Create an app with these OAuth 2.0 scopes:
-- `bookmark.read`
-- `tweet.read`
+- `bookmark.read` / `bookmark.write`
+- `tweet.read` / `tweet.write`
 - `users.read`
 - `offline.access`
 
@@ -63,6 +63,18 @@ X_USER_ID=your-numeric-user-id
 ```
 
 Tokens auto-refresh on expiry — set it up once, runs forever.
+
+### Multi-Auth (v1.2.0+)
+
+To post as an org account (e.g. @HiddenLeafHQ), add org credentials:
+
+```env
+X_ORG_ACCESS_TOKEN=your-org-access-token
+X_ORG_REFRESH_TOKEN=your-org-refresh-token
+X_ORG_USER_ID=your-org-numeric-user-id
+X_ORG_CONSUMER_KEY=your-org-consumer-key      # optional, falls back to X_CONSUMER_KEY
+X_ORG_CONSUMER_SECRET=your-org-consumer-secret  # optional, falls back to X_CONSUMER_SECRET
+```
 
 ## Quick Start
 
@@ -93,6 +105,30 @@ console.log(brief.content);
 
 Run with: `npx tsx script.ts`
 
+### Publishing (v1.1.0+)
+
+```typescript
+import { createXClientFromEnv } from '@hidden-leaf/x-skill';
+
+// Post as your personal account (default)
+const client = createXClientFromEnv();
+const tweet = await client.postTweet('Hello from x-skill');
+console.log(tweet.url);
+
+// Post as your org account
+const orgClient = createXClientFromEnv('org');
+const orgTweet = await orgClient.postTweet('Hello from the org');
+
+// Post with media
+const media = await client.uploadMedia(imageBuffer, {
+  consumerKey: process.env.X_ORG_CONSUMER_KEY!,
+  consumerSecret: process.env.X_ORG_CONSUMER_SECRET!,
+  accessToken: process.env.X_ORG_OAUTH1_ACCESS_TOKEN!,
+  accessTokenSecret: process.env.X_ORG_OAUTH1_ACCESS_TOKEN_SECRET!,
+});
+await orgClient.postTweet('Check this out', { mediaIds: [media.media_id_string] });
+```
+
 ## API Reference
 
 ### Sync Commands (hit X API — cost money)
@@ -112,6 +148,14 @@ Run with: `npx tsx script.ts`
 | `fetchAll()` | Get all cached bookmarks |
 | `stats()` | Cache statistics (folder/tweet/user counts, last sync) |
 | `close()` | Close database connection |
+
+### Publish Commands (hit X API — cost money)
+
+| Method | Description |
+|--------|-------------|
+| `postTweet(text, options?)` | Post a tweet (optional media IDs) |
+| `uploadMedia(imageData, oauth1)` | Upload image via OAuth 1.0a |
+| `deleteTweet(tweetId)` | Delete a tweet by ID |
 
 ### Synthesis (from cache — free)
 
@@ -208,13 +252,18 @@ x-skill is designed as an intelligence primitive that feeds into larger systems:
 
 ## Roadmap
 
-| Version | Focus |
-|---------|-------|
-| **1.0.0** | Bookmark intelligence — sync, cache, list, fetch, brief |
-| **1.1** | OAuth flow polish, error recovery improvements |
-| **2.0** | Search skill, thread parsing, profile management |
-| **3.0** | Publish, schedule, reply (write operations) |
+| Version | Focus | Status |
+|---------|-------|--------|
+| **1.0.0** | Bookmark intelligence — sync, cache, list, fetch, brief | Shipped |
+| **1.1.0** | Tweet posting, media upload (OAuth 1.0a) | Shipped |
+| **1.2.0** | Multi-auth — personal + org account switching | Shipped |
+| **2.0** | Search skill, thread parsing, profile management | Planned |
+| **3.0** | Schedule, reply, analytics | Planned |
 
 ## License
 
-MIT — [Hidden Leaf Networks](https://github.com/Hidden-Leaf-Networks)
+Apache 2.0 — [Hidden Leaf Networks](https://github.com/Hidden-Leaf-Networks)
+
+---
+
+Built in Detroit by [Hidden Leaf Networks](https://hiddenleafnetworks.com)
