@@ -229,6 +229,8 @@ export interface XClientOptions {
   retryDelay?: number;
   /** Request timeout in ms (default: 30000) */
   timeout?: number;
+  /** Override API base URL for compatible backends */
+  baseUrl?: string;
 }
 
 // ============================================================================
@@ -271,6 +273,8 @@ export interface BookmarkListParams {
   max_results?: number;
   /** Pagination token */
   pagination_token?: string;
+  /** Optional bookmark folder ID for compatible backends */
+  folderId?: string;
   /** Tweet fields to include */
   tweet_fields?: string[];
   /** User fields to include */
@@ -289,6 +293,29 @@ export interface BookmarkFolderListParams {
 export interface BookmarkFolderTweetsParams extends BookmarkListParams {
   /** Folder ID */
   folder_id: string;
+}
+
+/**
+ * Shared bookmark-sync contract implemented by the native X API client and
+ * compatible backends such as Hermes Tweet.
+ */
+export interface XBookmarkClient {
+  getBookmarks(params?: BookmarkListParams): Promise<XApiResponse<Tweet[]>>;
+  getAllBookmarks(params?: Omit<BookmarkListParams, 'pagination_token'>): Promise<{
+    tweets: Tweet[];
+    users: Map<string, User>;
+  }>;
+  getBookmarkFolders(params?: BookmarkFolderListParams): Promise<XApiResponse<BookmarkFolder[]>>;
+  getAllBookmarkFolders(): Promise<BookmarkFolder[]>;
+  getBookmarkFolderTweetIds(folderId: string): Promise<string[]>;
+  getBookmarksWithFolders(): Promise<{
+    tweets: Tweet[];
+    users: Map<string, User>;
+    folders: BookmarkFolder[];
+    folderTweetIds: Map<string, string[]>;
+  }>;
+  getTweetsByIds(ids: string[]): Promise<{ tweets: Tweet[]; users: Map<string, User> }>;
+  getMe(): Promise<XApiResponse<User>>;
 }
 
 // ============================================================================

@@ -64,6 +64,20 @@ X_USER_ID=your-numeric-user-id
 
 Tokens auto-refresh on expiry — set it up once, runs forever.
 
+### Optional: Hermes Tweet / Xquik Backend
+
+If you already use Hermes Tweet for X automation, x-skill can sync bookmarks
+through the same Xquik API key while keeping the local SQLite cache and brief
+workflow unchanged:
+
+```env
+X_SKILL_BACKEND=hermes-tweet
+XQUIK_API_KEY=xq_...
+```
+
+This backend supports bookmark folders, bookmark sync, tweet hydration, cache
+reads, and research briefs. The native X OAuth flow remains the default.
+
 ### Multi-Auth (v1.2.0+)
 
 To post as an org account (e.g. @HiddenLeafHQ), add org credentials:
@@ -214,6 +228,7 @@ Each brief includes:
 - **Cache-first** — SQLite with WAL mode for fast reads and crash-safe writes. Cross-session data access for downstream consumers
 - **No Claude API dependency** — Brief synthesis builds prompts for Claude Code to execute inline. No separate API key required
 - **Factory pattern** — `create*FromEnv()` functions for all major classes. Configuration via environment variables
+- **Backend selector** - `X_SKILL_BACKEND=hermes-tweet` can route sync through Hermes Tweet/Xquik while preserving the cache API
 - **Minimal API calls** — Smart hydration: fetch folder IDs (cheap), then hydrate only missing tweets via batch lookup (100 per call)
 
 ## Cost
@@ -257,6 +272,7 @@ x-skill is designed as an intelligence primitive that feeds into larger systems:
 | **1.0.0** | Bookmark intelligence — sync, cache, list, fetch, brief | Shipped |
 | **1.1.0** | Tweet posting, media upload (OAuth 1.0a) | Shipped |
 | **1.2.0** | Multi-auth — personal + org account switching | Shipped |
+| **1.3.0** | Optional Hermes Tweet/Xquik bookmark sync backend | Planned |
 | **2.0** | Search skill, thread parsing, profile management | Planned |
 | **3.0** | Schedule, reply, analytics | Planned |
 

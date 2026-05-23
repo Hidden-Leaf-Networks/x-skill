@@ -23,6 +23,8 @@ X_USER_ID=<your numeric X user ID>
 
 ```
 X_CACHE_DB_PATH=<custom path to SQLite DB, default: ~/.x-skill/bookmarks.db>
+X_SKILL_BACKEND=hermes-tweet
+XQUIK_API_KEY=<Hermes Tweet / Xquik API key>
 ```
 
 ### How to Get Credentials
@@ -30,6 +32,13 @@ X_CACHE_DB_PATH=<custom path to SQLite DB, default: ~/.x-skill/bookmarks.db>
 1. **X Developer Account:** Sign up at [developer.x.com](https://developer.x.com) (pay-per-use pricing, ~$5-15/month for bookmark reads)
 2. **Bearer Token:** Create an app in the Developer Portal → generate OAuth 2.0 User Context token with `bookmark.read`, `tweet.read`, `users.read` scopes
 3. **User ID:** Use [tweeterid.com](https://tweeterid.com) or call `GET /2/users/me` with your token
+
+### Hermes Tweet Backend
+
+Set `X_SKILL_BACKEND=hermes-tweet` and `XQUIK_API_KEY` to sync bookmark folders
+and tweets through Hermes Tweet/Xquik instead of the native X OAuth client. The
+same `BookmarksSkill` API, SQLite cache, and brief generation methods continue
+to work.
 
 ## API Reference
 
@@ -144,6 +153,16 @@ const folderTweets = await x.getAllBookmarkFolderTweets('folder-id');
 
 // Get authenticated user profile
 const me = await x.getMe();
+```
+
+### Backend Selection
+
+```typescript
+import { createBookmarkClientFromEnv, createBookmarksSkillFromEnv } from '@hidden-leaf/x-skill';
+
+// Uses X_SKILL_BACKEND. Defaults to native X API, or Hermes Tweet when set.
+const client = createBookmarkClientFromEnv();
+const skill = createBookmarksSkillFromEnv();
 ```
 
 ### BookmarkStore (Low-Level Cache)

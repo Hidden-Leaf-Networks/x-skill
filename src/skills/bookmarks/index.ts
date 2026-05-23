@@ -13,9 +13,9 @@
  *   x bookmarks brief --folder "Robotics"    → synthesize a research brief (from cache)
  */
 
-import { XClient, createXClientFromEnv } from '../../clients/x-client.js';
+import { createBookmarkClientFromEnv } from '../../clients/bookmark-client.js';
 import { BookmarkStore, createStoreFromEnv } from '../../cache/store.js';
-import type { Tweet, User } from '../../clients/types.js';
+import type { Tweet, User, XBookmarkClient } from '../../clients/types.js';
 import type {
   EnrichedBookmark,
   BookmarkListOutput,
@@ -30,7 +30,7 @@ export class BookmarksSkill {
   private readonly store: BookmarkStore;
 
   constructor(
-    private readonly client: XClient,
+    private readonly client: XBookmarkClient,
     store?: BookmarkStore,
   ) {
     this.store = store ?? createStoreFromEnv();
@@ -351,7 +351,7 @@ export class BookmarksSkill {
  * Reads X_BEARER_TOKEN, X_USER_ID, and optionally X_CACHE_DB_PATH from .env.
  */
 export function createBookmarksSkillFromEnv(): BookmarksSkill {
-  const client = createXClientFromEnv();
+  const client = createBookmarkClientFromEnv();
   const store = createStoreFromEnv();
   return new BookmarksSkill(client, store);
 }
