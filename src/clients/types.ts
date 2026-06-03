@@ -291,6 +291,28 @@ export interface BookmarkFolderTweetsParams extends BookmarkListParams {
   folder_id: string;
 }
 
+export interface UserTweetsParams {
+  /** Max results per page (5-100, default 100) */
+  max_results?: number;
+  /** Pagination token */
+  pagination_token?: string;
+  /** Tweet fields to include */
+  tweet_fields?: string[];
+  /** Return tweets created after this time (ISO 8601) */
+  start_time?: string;
+  /** Return tweets created before this time (ISO 8601) */
+  end_time?: string;
+  /** Exclude reply tweets or retweet tweets */
+  exclude?: ('replies' | 'retweets')[];
+}
+
+export interface DeleteAllResult {
+  deleted: number;
+  failed: number;
+  total: number;
+  failedIds: string[];
+}
+
 // ============================================================================
 // Errors
 // ============================================================================

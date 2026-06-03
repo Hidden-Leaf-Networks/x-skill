@@ -25,6 +25,8 @@ import {
   BookmarkFolder,
   BookmarkListParams,
   BookmarkFolderListParams,
+  UserTweetsParams,
+  DeleteAllResult,
   DEFAULT_TWEET_FIELDS,
   DEFAULT_USER_FIELDS,
   DEFAULT_EXPANSIONS,
@@ -556,6 +558,132 @@ export class XClient {
   async deleteTweet(tweetId: string): Promise<boolean> {
     const resp = await this.http.delete(`/tweets/${tweetId}`);
     return resp.data?.data?.deleted === true;
+  }
+
+  // ==========================================================================
+  // User Timeline
+  // ==========================================================================
+
+  /**
+   * Fetch a page of the authenticated user's tweets.
+   * Requires Basic+ tier (Free tier returns 403).
+   */
+  async getUserTweets(
+    params: UserTweetsParams = {},
+  ): Promise<XApiResponse<Tweet[]>> {
+    const {
+      max_results = 100,
+      pagination_token,
+      tweet_fields,
+      start_time,
+      end_time,
+      exclude,
+    } = params;
+
+    const queryParams: Record<string, string> = {
+      max_results: String(max_results),
+      'tweet.fields': (tweet_fields ?? DEFAULT_TWEET_FIELDS).join(','),
+      'user.fields': DEFAULT_USER_FIELDS.join(','),
+      expansions: DEFAULT_EXPANSIONS.join(','),
+    };
+
+    if (pagination_token) queryParams.pagination_token = pagination_token;
+    if (start_time) queryParams.start_time = start_time;
+    if (end_time) queryParams.end_time = end_time;
+    if (exclude?.length) queryParams.exclude = exclude.join(',');
+
+    const resp = await this.http.get(`/users/${this.userId}/tweets`, {
+      params: queryParams,
+    });
+
+    return {
+      data: resp.data?.data ?? [],
+      meta: resp.data?.meta,
+      includes: resp.data?.includes,
+    };
+  }
+
+  /**
+   * Auto-paginate through all of the authenticated user's tweets.
+   * Requires Basic+ tier.
+   */
+  async getAllUserTweets(
+    params: Omit<UserTweetsParams, 'pagination_token'> = {},
+  ): Promise<Tweet[]> {
+    const allTweets: Tweet[] = [];
+    let paginationToken: string | undefined;
+
+    do {
+      const page = await this.getUserTweets({
+        ...params,
+        pagination_token: paginationToken,
+      });
+
+      if (page.data.length > 0) {
+        allTweets.push(...page.data);
+      }
+
+      paginationToken = page.meta?.next_token;
+    } while (paginationToken);
+
+    return allTweets;
+  }
+
+  /**
+   * Delete all tweets for the authenticated user.
+   *
+   * If `tweetIds` is provided, deletes those specific tweets.
+   * Otherwise, fetches all tweets via the timeline API (requires Basic+ tier)
+   * and deletes them.
+   *
+   * @param tweetIds — Optional array of tweet IDs to delete. If omitted, fetches all.
+   * @param delayMs — Delay between deletions in ms (default 1000) to respect rate limits.
+   * @param onProgress — Optional callback fired after each deletion attempt.
+   */
+  async deleteAllTweets(options?: {
+    tweetIds?: string[];
+    delayMs?: number;
+    onProgress?: (progress: { current: number; total: number; deleted: number; failed: number }) => void;
+  }): Promise<DeleteAllResult> {
+    const { tweetIds, delayMs = 1000, onProgress } = options ?? {};
+
+    const ids = tweetIds ?? (await this.getAllUserTweets()).map((t) => t.id);
+
+    let deleted = 0;
+    let failed = 0;
+    const failedIds: string[] = [];
+
+    for (let i = 0; i < ids.length; i++) {
+      try {
+        const ok = await this.deleteTweet(ids[i]);
+        if (ok) {
+          deleted++;
+        } else {
+          failed++;
+          failedIds.push(ids[i]);
+        }
+      } catch (err: any) {
+        if (err instanceof XNotFoundError) {
+          deleted++; // already gone
+        } else if (err instanceof XRateLimitError) {
+          const waitMs = (err.retryAfter ?? 60) * 1000;
+          await new Promise((r) => setTimeout(r, waitMs));
+          i--; // retry
+          continue;
+        } else {
+          failed++;
+          failedIds.push(ids[i]);
+        }
+      }
+
+      onProgress?.({ current: i + 1, total: ids.length, deleted, failed });
+
+      if (i < ids.length - 1 && delayMs > 0) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+
+    return { deleted, failed, total: ids.length, failedIds };
   }
 
   // ==========================================================================

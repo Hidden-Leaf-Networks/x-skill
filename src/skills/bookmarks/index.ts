@@ -49,8 +49,11 @@ export class BookmarksSkill {
    *   2. Fetch ALL bookmarks with full data from main endpoint (paginated)
    *   3. Hydrate any missing tweets via GET /2/tweets lookup (100 per call)
    *   4. Cross-reference IDs to assign tweets to folders in the cache
+   *
+   * @param hiddenFolders - Optional array of { id, name } for folders beyond
+   *   the X API's 20-folder listing cap. These are synced by direct ID lookup.
    */
-  async syncAll(): Promise<SyncResult> {
+  async syncAll(hiddenFolders?: Array<{ id: string; name: string }>): Promise<SyncResult> {
     const logId = this.store.logSyncStart('all');
 
     try {
@@ -114,12 +117,54 @@ export class BookmarksSkill {
         });
       }
 
+      // Sync hidden folders (beyond the 20-folder API listing cap)
+      if (hiddenFolders?.length) {
+        for (const hidden of hiddenFolders) {
+          try {
+            const hiddenIds = await this.client.getBookmarkFolderTweetIds(hidden.id);
+            const { tweets: hiddenTweets, users: hiddenUsers } =
+              await this.client.getTweetsByIds(hiddenIds);
+
+            for (const user of hiddenUsers.values()) {
+              this.store.upsertUser(user);
+            }
+            for (const tweet of hiddenTweets) {
+              this.store.upsertTweet(tweet);
+              tweetMap.set(tweet.id, tweet);
+            }
+
+            this.store.upsertFolder({
+              id: hidden.id,
+              name: hidden.name,
+              tweet_count: hiddenIds.length,
+            });
+
+            let hiddenLinked = 0;
+            for (let i = 0; i < hiddenIds.length; i++) {
+              if (tweetMap.has(hiddenIds[i])) {
+                this.store.linkTweetToFolder(hidden.id, hiddenIds[i], i);
+                hiddenLinked++;
+              }
+            }
+
+            folderResults.push({
+              name: hidden.name,
+              id: hidden.id,
+              tweetCount: hiddenLinked,
+            });
+          } catch (err) {
+            // Log but don't fail the whole sync for one hidden folder
+            console.error(`[x-skill] Failed to sync hidden folder "${hidden.name}": ${err}`);
+          }
+        }
+      }
+
       const totalTweets = tweetMap.size;
       this.store.logSyncComplete(logId, totalTweets);
 
       return {
         syncedAt: new Date().toISOString(),
-        totalFolders: folders.length,
+        totalFolders: folders.length + (hiddenFolders?.length ?? 0),
         totalTweets,
         folders: folderResults,
       };
@@ -186,6 +231,60 @@ export class BookmarksSkill {
         totalFolders: 1,
         totalTweets: linkedCount,
         folders: [{ name: folder.name, id: folder.id, tweetCount: linkedCount }],
+      };
+    } catch (error) {
+      this.store.logSyncError(logId, String(error));
+      throw error;
+    }
+  }
+
+  /**
+   * Sync a folder by direct ID — bypasses the 20-folder API listing cap.
+   * Use this for folders that exist on X but don't appear in getAllBookmarkFolders().
+   *
+   * Usage: await skill.syncFolderById('2038583312940253459', '3D Printing')
+   */
+  async syncFolderById(folderId: string, folderName: string): Promise<SyncResult> {
+    const logId = this.store.logSyncStart('folder');
+
+    try {
+      // Get tweet IDs directly — this endpoint works regardless of listing cap
+      const tweetIds = await this.client.getBookmarkFolderTweetIds(folderId);
+
+      // Hydrate all via tweet lookup (full data, 100 per call)
+      const { tweets, users } = await this.client.getTweetsByIds(tweetIds);
+      const tweetMap = new Map(tweets.map((t) => [t.id, t]));
+
+      // Upsert users + tweets
+      for (const user of users.values()) {
+        this.store.upsertUser(user);
+      }
+      for (const tweet of tweets) {
+        this.store.upsertTweet(tweet);
+      }
+
+      // Upsert the folder and link tweets
+      this.store.upsertFolder({
+        id: folderId,
+        name: folderName,
+        tweet_count: tweetIds.length,
+      });
+
+      let linkedCount = 0;
+      for (let i = 0; i < tweetIds.length; i++) {
+        if (tweetMap.has(tweetIds[i])) {
+          this.store.linkTweetToFolder(folderId, tweetIds[i], i);
+          linkedCount++;
+        }
+      }
+
+      this.store.logSyncComplete(logId, linkedCount);
+
+      return {
+        syncedAt: new Date().toISOString(),
+        totalFolders: 1,
+        totalTweets: linkedCount,
+        folders: [{ name: folderName, id: folderId, tweetCount: linkedCount }],
       };
     } catch (error) {
       this.store.logSyncError(logId, String(error));
