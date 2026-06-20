@@ -52,6 +52,8 @@ export type {
   XOAuth1Config,
   TweetPostResult,
   MediaUploadResult,
+  UserTweetsParams,
+  DeleteAllResult,
 } from './clients/types.js';
 
 export {
@@ -102,4 +104,4 @@ export { createLogger } from './utils/logger.js';
 // Version
 // ============================================================================
 
-export const VERSION = '1.2.0';
+export const VERSION = '1.4.0';

@@ -65,10 +65,30 @@ const result = await bookmarks.syncAll();
 // result.syncedAt: ISO string
 ```
 
-#### Sync Single Folder (hits X API — costs money)
+#### Sync with Hidden Folders (hits X API — costs money)
+
+The X API caps folder listing at 20. If you have more folders, pass their IDs directly:
+
+```typescript
+const result = await bookmarks.syncAll([
+  { id: '2038583312940253459', name: '3D Printing' },
+  { id: '1234567890123456789', name: 'Another Hidden Folder' },
+]);
+// Hidden folders are synced alongside the visible 20
+```
+
+#### Sync Single Folder by Name (hits X API — costs money)
 
 ```typescript
 const result = await bookmarks.syncFolder('Robotics');
+```
+
+#### Sync Single Folder by ID (hits X API — costs money)
+
+Bypass the 20-folder listing cap by syncing directly with a folder ID:
+
+```typescript
+const result = await bookmarks.syncFolderById('2038583312940253459', '3D Printing');
 ```
 
 #### List Folders (from cache — free)
