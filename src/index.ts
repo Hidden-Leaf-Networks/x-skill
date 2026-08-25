@@ -14,6 +14,8 @@
 // Client
 // ============================================================================
 
+export { createBookmarkClientFromEnv, resolveXSkillBackend } from './clients/bookmark-client.js';
+export { HermesTweetClient, createHermesTweetClientFromEnv } from './clients/hermes-tweet-client.js';
 export { XClient, createXClientFromEnv, createOrgXClientFromEnv } from './clients/x-client.js';
 
 // ============================================================================
@@ -46,6 +48,7 @@ export type {
   BookmarkListParams,
   BookmarkFolderListParams,
   BookmarkFolderTweetsParams,
+  XBookmarkClient,
   XOAuth1Config,
   TweetPostResult,
   MediaUploadResult,

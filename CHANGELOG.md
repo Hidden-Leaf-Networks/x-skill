@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Optional Hermes Tweet/Xquik bookmark sync backend selected with `X_SKILL_BACKEND=hermes-tweet`
+
 ## [1.0.0] - 2026-03-31
 
 ### Added

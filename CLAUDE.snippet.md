@@ -6,6 +6,7 @@ This is NOT an MCP tool or registered skill. To use it, write a TypeScript scrip
 ## Setup
 - Credentials are in `.env` (see `node_modules/@hidden-leaf/x-skill/.env.example`)
 - Required: `X_BEARER_TOKEN`, `X_USER_ID`
+- Optional Hermes Tweet backend: set `X_SKILL_BACKEND=hermes-tweet` and `XQUIK_API_KEY`
 
 ## Usage
 When the user asks about X bookmarks, bookmark folders, research briefs from saved posts, or wants to analyze their X content — use this skill.

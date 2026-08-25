@@ -662,7 +662,7 @@ export class XClient {
           failed++;
           failedIds.push(ids[i]);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (err instanceof XNotFoundError) {
           deleted++; // already gone
         } else if (err instanceof XRateLimitError) {
